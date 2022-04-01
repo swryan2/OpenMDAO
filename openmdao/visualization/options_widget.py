@@ -52,7 +52,7 @@ class OptionsWidget(object):
                 newval = newval.strip().split('\n')
 
             try:
-                option['val'] = newval
+                opts[name] = newval
             except ValueError as err:
                 print(str(err))
 

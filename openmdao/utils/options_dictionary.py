@@ -63,6 +63,8 @@ class OptionsDictionary(object):
         Flag to determine if all options in UserOptions are recordable.
     _widget : OptionsWidget
         If running in a Jupyter notebook, a widget for viewing/setting options.
+    _history : list
+        List of changes made to options values.
     """
 
     def __init__(self, parent_name=None, read_only=False):
@@ -73,6 +75,7 @@ class OptionsDictionary(object):
         self._parent_name = parent_name
         self._read_only = read_only
         self._all_recordable = True
+        self._history = []
 
     def __getstate__(self):
         """
@@ -488,6 +491,8 @@ class OptionsDictionary(object):
 
         meta['val'] = value
         meta['has_been_set'] = True
+
+        self._history.append((name, value))
 
     def __getitem__(self, name):
         """
