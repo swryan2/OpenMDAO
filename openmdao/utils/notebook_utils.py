@@ -142,6 +142,65 @@ def show_options_table(reference, recording_options=False):
                        "`pip install openmdao[docs]` to upgrade.")
 
 
+from traitlets import default
+from nbconvert.preprocessors.base import Preprocessor
+from nbconvert.exporters.python import PythonExporter
+from pprint import pprint
+
+
+class OMWidgetPreprocessor(Preprocessor):
+    def preprocess_cell(self, cell, resources, index):
+        """
+        Override if you want to apply some preprocessing to each cell.
+        Must return modified cell and resource dictionary.
+
+        Parameters
+        ----------
+        cell : NotebookNode cell
+            Notebook cell being processed
+        resources : dictionary
+            Additional resources used in the conversion process.  Allows
+            preprocessors to pass variables into the Jinja engine.
+        index : int
+            Index of the cell being processed
+        """
+        widget_key = 'application/vnd.jupyter.widget-view+json'
+        if cell['cell_type'] == 'code' and 'outputs' in cell:
+            for outp in cell['outputs']:
+                if 'data' in outp and widget_key in outp['data']:
+                    print(f"===   Cell #{index} contains a widget   ===")
+                    pprint(resources)
+                    pprint(cell)
+
+        return cell, resources
+
+class OMExporter(PythonExporter):
+    """
+    Exports an OpenMDAO code file.
+    Note that the file produced will have a shebang of '#!/usr/bin/env python'
+    regardless of the actual python version used in the notebook.
+    """
+    def __init__(self, config=None, **kw):
+        """
+        Public constructor
+
+        Parameters
+        ----------
+        config : ``traitlets.config.Config``
+            User configuration instance.
+        `**kw`
+            Additional keyword arguments passed to parent __init__
+
+        """
+        self.preprocessors.append(OMWidgetPreprocessor())
+
+        super().__init__(config=None, **kw)
+
+    @default("template_name")
+    def _template_name_default(self):
+        return "openmdao"
+
+
 def cite(reference):
     """
     Return the citation of the given reference path.

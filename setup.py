@@ -249,7 +249,10 @@ setup(
             'nearestneighbor=openmdao.surrogate_models.nearest_neighbor:NearestNeighbor',
             'responsesurface=openmdao.surrogate_models.response_surface:ResponseSurface',
             'multificokrigingsurrogate=openmdao.surrogate_models.multifi_cokriging:MultiFiCoKrigingSurrogate',
-        ]
+        ],
+        'nbconvert.exporters': [
+            'openmdao=openmdao.utils.notebook_utils:OMExporter'
+        ],
     },
     extras_require=optional_dependencies,
 )
