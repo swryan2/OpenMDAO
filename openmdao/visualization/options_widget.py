@@ -4,7 +4,6 @@ A widget-based representation of OptionsDictionary for use in Jupyter notebooks.
 
 try:
     import ipywidgets as widgets
-    from ipywidgets import DOMWidget, register
     from ipywidgets import interact, Layout
     from IPython.display import display
 except Exception:
@@ -36,6 +35,7 @@ class OptionsWidget(object):
         _dict = opts._dict
         _widgets = []
         _style = {'description_width': 'initial', 'align-items': 'center'}
+        # _path = opts._parent_name+'.options'
 
         messages = widgets.Output()
 
@@ -184,5 +184,17 @@ class OptionsWidget(object):
         _widgets = [wdgt for _, wdgt in _wdgt_rows]
 
         box_layout = Layout(display='flex', flex_flow='row wrap')
-        display(widgets.GridBox(children=_widgets, layout=box_layout))
+        grid = widgets.GridBox(children=_widgets, layout=box_layout)
+
+        # label = widgets.Label(value=_path, layout=Layout(width='100%', style='font-style:oblique'))
+        # header = widgets.HBox([label], layout=Layout(width='100%'))
+        # # from pprint import pprint
+        # # pprint(dir(header.layout))
+        # header.layout.align_items = 'center'
+        # header.layout.align_content = 'center'
+        # header.layout.justify_content = 'space-around'
+        # display(widgets.VBox([label, grid]))
+
+        display(grid)
+
         display(messages)
