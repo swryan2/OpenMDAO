@@ -250,7 +250,7 @@ setup(
             'multificokrigingsurrogate=openmdao.surrogate_models.multifi_cokriging:MultiFiCoKrigingSurrogate',
         ],
         'nbconvert.exporters': [
-            'openmdao=openmdao.utils.notebook_utils:OMExporter'
+            'openmdao=openmdao.utils.notebook_export:OMExporter'
         ],
     },
     extras_require=optional_dependencies,
