@@ -186,15 +186,5 @@ class OptionsWidget(object):
         box_layout = Layout(display='flex', flex_flow='row wrap')
         grid = widgets.GridBox(children=_widgets, layout=box_layout)
 
-        # label = widgets.Label(value=_path, layout=Layout(width='100%', style='font-style:oblique'))
-        # header = widgets.HBox([label], layout=Layout(width='100%'))
-        # # from pprint import pprint
-        # # pprint(dir(header.layout))
-        # header.layout.align_items = 'center'
-        # header.layout.align_content = 'center'
-        # header.layout.justify_content = 'space-around'
-        # display(widgets.VBox([label, grid]))
-
         display(grid)
-
         display(messages)
