@@ -176,7 +176,7 @@ class OMExporter(PythonExporter):
 
     def __init__(self, config=None, **kwargs):
         """
-        Public constructor_
+        Public constructor.
         """
         self.preprocessors.append(OMPreprocessor())
 
@@ -184,6 +184,9 @@ class OMExporter(PythonExporter):
 
     @property
     def default_config(self):
+        """
+        Customize configuration for OpenMDAO exporter.
+        """
         c = Config({
             "ExecutePreprocessor": {"enabled": False},
             "ClearOutputPreprocessor": {"enabled": False},
