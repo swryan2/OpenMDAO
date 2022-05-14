@@ -155,8 +155,8 @@ class OMExporter(PythonExporter):
     ----------
     config : ``traitlets.config.Config``
         User configuration instance.
-    **kw
-        Additional keyword arguments passed to parent __init__.
+    **kwargs : dict of keyword arguments
+        Argumenst for super classes.
 
     Notes
     -----
@@ -174,13 +174,13 @@ class OMExporter(PythonExporter):
     see: https://nbconvert.readthedocs.io/en/latest/external_exporters.html
     """
 
-    def __init__(self, config=None, **kw):
+    def __init__(self, config=None, **kwargs):
         """
         Public constructor_
         """
         self.preprocessors.append(OMPreprocessor())
 
-        super().__init__(config=None, **kw)
+        super().__init__(config=None, **kwargs)
 
     @property
     def default_config(self):
@@ -195,7 +195,7 @@ class OMExporter(PythonExporter):
 
 def _jupyter_bundlerextension_paths():
     """
-    OpenMDAO bundler extension.
+    Declare metadata for OpenMDAO bundler extension.
 
     Notes
     -----
