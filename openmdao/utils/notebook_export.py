@@ -25,8 +25,10 @@ class OMPreprocessor(ExecutePreprocessor):
 
     Parameters
     ----------
+    *args : list
+        Positional arguments (not used but required by numpydoc for some reason).
     **kwargs : dict of keyword arguments
-        Argumenst for super classes.
+        Keyword arguments for super classes.
 
     Attributes
     ----------
@@ -153,10 +155,10 @@ class OMExporter(PythonExporter):
 
     Parameters
     ----------
-    config : ``traitlets.config.Config``
-        User configuration instance.
+    *args : list
+        Positional arguments (not used but required by numpydoc for some reason).
     **kwargs : dict of keyword arguments
-        Argumenst for super classes.
+        Keyword arguments for super classes.
 
     Notes
     -----
@@ -174,13 +176,13 @@ class OMExporter(PythonExporter):
     see: https://nbconvert.readthedocs.io/en/latest/external_exporters.html
     """
 
-    def __init__(self, config=None, **kwargs):
+    def __init__(self, **kwargs):
         """
         Public constructor.
         """
         self.preprocessors.append(OMPreprocessor())
 
-        super().__init__(config=None, **kwargs)
+        super().__init__(**kwargs)
 
     @property
     def default_config(self):
