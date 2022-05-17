@@ -36,7 +36,7 @@ optional_dependencies = {
         'parameterized',
         'numpydoc>=1.1',
         'pycodestyle>=2.4.0',
-        'pydocstyle==2.0.0',
+        'pydocstyle',
         'testflo>=1.3.6'
         'websockets>8',
         'aiounittest',
