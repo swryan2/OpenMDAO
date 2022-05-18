@@ -2,6 +2,7 @@
 
 import os
 import os.path
+from datetime import datetime
 
 from traitlets import default
 from traitlets.config import Config
@@ -18,9 +19,9 @@ unquoted = ['True', 'False', 'None']
 
 class OMPreprocessor(ExecutePreprocessor):
     """
-    Preprocessor used to generate OpenMDAO script from a Jupyter notebook.
+    Preprocessor used to generate an OpenMDAO script from a Jupyter notebook.
 
-    Removes invisible cells and assigns attributes to objects that have a
+    Removes invisible cells and assigns attributes to objects that have an
     associated widget view based on widget metadata.
 
     Parameters
@@ -143,6 +144,8 @@ class OMPreprocessor(ExecutePreprocessor):
                                 self.process_widget(self.widget_state[model_id], obj_name)
 
                 if self._widget_code:
+                    self._widget_code.insert(0,
+                        f"# Widget state (updated: {datetime.now().strftime('%m/%d/%Y %H:%M:%S')})")
                     cell['source'] += '\n' + '\n'.join(self._widget_code)
                     self._widget_code = []
 
