@@ -184,6 +184,12 @@ class NewtonSolver(NonlinearSolver):
         # Execute guess_nonlinear if specified.
         system._guess_nonlinear()
 
+        # # When under a complex step from higher in the hierarchy, sometimes the step is too small
+        # # to trigger reconvergence, so nudge the outputs slightly so that we always get at least
+        # # one iteration of Newton.
+        # if system.under_finite_difference and self.options['cs_reconverge']:
+        #     system._outputs += np.linalg.norm(system._outputs.asarray()) * 1e-10
+
         with Recording('Newton_subsolve', 0, self) as rec:
 
             if solve_subsystems and self._iter_count <= self.options['max_sub_solves']:

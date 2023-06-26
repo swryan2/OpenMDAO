@@ -872,6 +872,51 @@ class TestProblemCheckTotals(unittest.TestCase):
         totals = prob.check_totals(of=of, wrt=wrt, method='cs', compact_print=False)
         assert_check_totals(totals, atol=1e-12, rtol=1e-12)
 
+    def test_fd_around_newton_new_method(self):
+        # The old method of nudging the Newton and forcing it to reconverge could not achieve the
+        # same accuracy on this model. (1e8 vs 1e12)
+
+        class SellarDerivatives(om.Group):
+
+            def setup(self):
+                self.add_subsystem('px', om.IndepVarComp('x', 1.0), promotes=['x'])
+                self.add_subsystem('pz', om.IndepVarComp('z', np.array([5.0, 2.0])), promotes=['z'])
+
+                self.add_subsystem('d1', SellarDis1withDerivatives(), promotes=['x', 'z', 'y1', 'y2'])
+                self.add_subsystem('d2', SellarDis2withDerivatives(), promotes=['z', 'y1', 'y2'])
+                sub = self.add_subsystem('sub', om.Group(), promotes=['*'])
+
+                sub.linear_solver = om.DirectSolver(assemble_jac=True)
+                sub.options['assembled_jac_type'] = 'csc'
+
+                obj = sub.add_subsystem('obj_cmp', om.ExecComp('obj = x**2 + z[1] + y1 + exp(-y2)', obj=0.0,
+                                                         x=0.0, z=np.array([0.0, 0.0]), y1=0.0, y2=0.0),
+                                  promotes=['obj', 'x', 'z', 'y1', 'y2'])
+                obj.declare_partials(of='*', wrt='*', method='fd')
+
+                con1 = sub.add_subsystem('con_cmp1', om.ExecComp('con1 = 3.16 - y1', con1=0.0, y1=0.0),
+                                  promotes=['con1', 'y1'])
+                con2 = sub.add_subsystem('con_cmp2', om.ExecComp('con2 = y2 - 24.0', con2=0.0, y2=0.0),
+                                  promotes=['con2', 'y2'])
+                con1.declare_partials(of='*', wrt='*', method='fd')
+                con2.declare_partials(of='*', wrt='*', method='fd')
+
+                self.nonlinear_solver = om.NewtonSolver(solve_subsystems=False)
+                self.linear_solver = om.DirectSolver(assemble_jac=False)
+
+        prob = om.Problem()
+        prob.model = SellarDerivatives()
+        prob.set_solver_print(level=0)
+        prob.setup(force_alloc_complex=True)
+
+        prob.run_model()
+
+        wrt = ['z', 'x']
+        of = ['obj', 'con1', 'con2']
+
+        totals = prob.check_totals(of=of, wrt=wrt, method='fd', compact_print=False)
+        assert_check_totals(totals, atol=1e-12, rtol=1e-12)
+
     def test_cs_around_newton_in_comp(self):
         # CS around Newton in an ImplicitComponent.
         class MyComp(om.ImplicitComponent):
@@ -1031,6 +1076,21 @@ class TestProblemCheckTotals(unittest.TestCase):
 
         for key, val in totals.items():
             assert_near_equal(val['rel error'][0], 0.0, 7e-8)
+
+    def test_fd_around_broyden_top_sparse(self):
+        prob = om.Problem()
+        prob.model = SellarDerivatives()
+
+        prob.setup(force_alloc_complex=True)
+
+        prob.model.nonlinear_solver = om.BroydenSolver()
+        prob.model.linear_solver = om.DirectSolver(assemble_jac=True)
+        prob.run_model()
+
+        totals = prob.check_totals(of=['obj', 'con1'], wrt=['x', 'z'], method='fd')  #, out_stream=None)
+
+        for key, val in totals.items():
+            assert_near_equal(val['rel error'][0], 0.0, 1e-7)
 
     def test_check_totals_on_approx_model(self):
         prob = om.Problem()
@@ -1815,7 +1875,7 @@ class TestCheckTotalsMultipleSteps(unittest.TestCase):
                 self.assertEqual(contents.count("step"), 0)
                 # check number of rows/cols
                 self.assertEqual(contents.count("+-------------------------------+------------------+-------------+-------------+-------------+-------------+--------------------+"), nsubjacs + 1)
-            
+
     def test_single_cs_step_compact(self):
         for mode in ('fwd', 'rev'):
             with self.subTest(f"{mode} derivatives"):
@@ -1829,7 +1889,7 @@ class TestCheckTotalsMultipleSteps(unittest.TestCase):
                 self.assertEqual(contents.count("step"), 0)
                 # check number of rows/cols
                 self.assertEqual(contents.count("+-------------------------------+------------------+-------------+-------------+-------------+-------------+------------+"), nsubjacs + 1)
-            
+
     def test_multi_fd_steps_fwd(self):
         p = om.Problem(model=CircleOpt(), driver=om.ScipyOptimizeDriver(optimizer='SLSQP', disp=False))
         p.setup(mode='fwd')
@@ -1897,7 +1957,7 @@ class TestCheckTotalsMultipleSteps(unittest.TestCase):
                 self.assertEqual(contents.count("step"), 1)
                 # check number of rows/cols
                 self.assertEqual(contents.count("+-------------------------------+------------------+-------------+-------------+-------------+-------------+-------------+--------------------+"), (nsubjacs*2) + 1)
-            
+
     def test_multi_cs_steps_compact(self):
         for mode in ('fwd', 'rev'):
             with self.subTest(f"{mode} derivatives"):
@@ -1915,7 +1975,7 @@ class TestCheckTotalsMultipleSteps(unittest.TestCase):
     def test_multi_fd_steps_compact_directional(self):
         expected_divs = {
             'fwd': ('+----------------------------------------------------------------------------------------+------------------+-------------+-------------+-------------+-------------+-------------+------------+', 7),
-            'rev': ('+-------------------------------+-----------------------------------------+-------------+-------------+-------------+-------------+-------------+------------+', 13), 
+            'rev': ('+-------------------------------+-----------------------------------------+-------------+-------------+-------------+-------------+-------------+------------+', 13),
         }
         for mode in ('fwd', 'rev'):
             with self.subTest(f"{mode} derivatives"):
@@ -1929,7 +1989,7 @@ class TestCheckTotalsMultipleSteps(unittest.TestCase):
                 # check number of rows/cols
                 s, times = expected_divs[mode]
                 self.assertEqual(contents.count(s), times)
-            
+
 
 
 if __name__ == "__main__":

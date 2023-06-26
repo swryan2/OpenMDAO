@@ -315,6 +315,12 @@ class BroydenSolver(NonlinearSolver):
         if system.under_complex_step and self.options['cs_reconverge']:
             system._outputs += np.linalg.norm(system._outputs.asarray()) * 1e-10
 
+        # # When under a finite difference from higher in the hierarchy, sometimes the step is too small
+        # # to trigger reconvergence, so nudge the outputs slightly so that we always get at least
+        # # one iteration of Broyden.
+        # if system.under_finite_difference and self.options['cs_reconverge']:
+        #     system._outputs += np.linalg.norm(system._outputs.asarray()) * 1e-10
+
         # Start with initial states.
         self.xm = self.get_vector(system._outputs)
 
