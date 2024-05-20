@@ -119,9 +119,9 @@ jobs:
             NUMPY: '1.26'
             SCIPY: '1.13'
             PETSc: '3.20'
-            # PYOPTSPARSE: 'v2.11.0'
-            # PAROPT: true
-            # SNOPT: '7.7'
+            PYOPTSPARSE: 'v2.11.0'
+            PAROPT: true
+            SNOPT: '7.7'
             OPTIONAL: '[all]'
             TESTS: true
             EXCLUDE: ${{ github.event_name == 'workflow_dispatch'  && ! inputs.MacOS_ARM }}
