@@ -5,7 +5,7 @@ name: Update Associated POEM
 
 on:
   pull_request:
-    types: [ opened, reopened, closed ]
+    types: [ opened, reopened, closed, synchronize ]
     branches: [ master ]
 
 # permissions: {}
