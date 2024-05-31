@@ -34,6 +34,7 @@ def get_poem_id(repository, pull_id):
                                              "issue", "view", "--json", "body", pull_id])
     except subprocess.CalledProcessError as err:
         print(f"Unable to access pull request #{pull_id}:\nrc={err.returncode}")
+        print(pull_json)
         return ERROR
 
     pull_body = json.loads(pull_json)["body"]
