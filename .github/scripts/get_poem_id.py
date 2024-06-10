@@ -61,10 +61,12 @@ def get_poem_id(repository, pull_id):
 
     try:
         issue_json = subprocess.check_output(["gh", "--repo", repository,
-                                              "issue", "view", "--json", "body", issue_id])
+                                              "issue", "view", "--json", "body", issue_id],
+                                              stderr=subprocess.STDOUT, shell=True,
+                                              timeout=10, universal_newlines=True);
     except subprocess.CalledProcessError as err:
         print(f"Unable to access issue  #{issue_id}:\nrc={err.returncode}")
-        print(err)
+        print(issue_json)
         return ERROR
 
     issue_body = json.loads(issue_json)["body"]
