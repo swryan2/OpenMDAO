@@ -60,8 +60,7 @@ def get_poem_id(repository, pull_id):
     print("-------------------------------------------------------------------------------")
 
     try:
-        issue_json = subprocess.check_output(["gh", "--repo", repository,
-                                              "issue", "view", "--json", "body", issue_id],
+        issue_json = subprocess.check_output(f"gh --repo {repository} issue view --json body {issue_id}",
                                               stderr=subprocess.STDOUT, shell=True,
                                               timeout=10, universal_newlines=True);
     except subprocess.CalledProcessError as err:
