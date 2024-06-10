@@ -30,18 +30,18 @@ def get_poem_id(repository, pull_id):
     print(f"Checking Pull Request #{pull_id} for associated issue...")
     print("-------------------------------------------------------------------------------")
     try:
-        pull_json = subprocess.check_output(f"gh --repo {repository} issue view --json body {pull_id}",
-                                              stderr=subprocess.STDOUT, shell=True,
-                                              timeout=10, universal_newlines=True);
+        p = subprocess.run(["gh", "--repo", repository, "issue", "view", "--json", "body", pull_id],
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     except subprocess.CalledProcessError as err:
         print(f"Unable to access pull request #{pull_id}:\nrc={err.returncode}")
-        print(pull_json)
+        print(f"stdout:\n------\n{p.stdout}")
+        print(f"stderr:\n------\n{p.stderr}")
         return ERROR
 
-    from pprint import pprint
-    pprint(pull_json)
+    print(f"stdout:\n------\n{p.stdout}")
+    print(f"stderr:\n------\n{p.stderr}")
 
-    pull_body = json.loads(pull_json)["body"]
+    pull_body = json.loads(p.stdout)["body"]
 
     issue_id = ""
 
@@ -64,19 +64,18 @@ def get_poem_id(repository, pull_id):
     print("-------------------------------------------------------------------------------")
 
     try:
-        repository.replace('swryan', 'OpenMDAO')
-        issue_json = subprocess.check_output(f"gh --repo {repository} issue view --json body {issue_id}",
-                                              stderr=subprocess.STDOUT, shell=True,
-                                              timeout=10, universal_newlines=True);
+        p = subprocess.run(["gh", "--repo", repository, "issue", "view", "--json", "body", issue_id],
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     except subprocess.CalledProcessError as err:
         print(f"Unable to access issue  #{issue_id}:\nrc={err.returncode}")
-        print(issue_json)
+        print(f"stdout:\n------\n{p.stdout}")
+        print(f"stderr:\n------\n{p.stderr}")
         return ERROR
 
-    from pprint import pprint
-    pprint(issue_json)
+    print(f"stdout:\n------\n{p.stdout}")
+    print(f"stderr:\n------\n{p.stderr}")
 
-    issue_body = json.loads(issue_json)["body"]
+    issue_body = json.loads(p.stdout)["body"]
 
     poem_id = ""
 
