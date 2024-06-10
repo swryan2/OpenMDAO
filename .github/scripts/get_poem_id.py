@@ -64,6 +64,7 @@ def get_poem_id(repository, pull_id):
                                               "issue", "view", "--json", "body", issue_id])
     except subprocess.CalledProcessError as err:
         print(f"Unable to access issue  #{issue_id}:\nrc={err.returncode}")
+        print(err)
         return ERROR
 
     issue_body = json.loads(issue_json)["body"]
