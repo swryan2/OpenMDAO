@@ -51,7 +51,7 @@ jobs:
           fi
 
       - name: Comment on PR
-        if: (github.event.action == 'opened' || github.event.action == 'reopened') && steps.check_for_poem.outputs.POEM_ID != ''
+        if: (github.event.action == 'opened' || github.event.action == 'reopened' || github.event.action == 'synchronize') && steps.check_for_poem.outputs.POEM_ID != ''
         env:
           POEM_ID: ${{ steps.check_for_poem.outputs.POEM_ID }}
           POEM_URL: ${{ github.server_url }}/${{ github.repository_owner }}/POEMs/blob/master/POEM_${{ steps.check_for_poem.outputs.POEM_ID }}.md
