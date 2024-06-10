@@ -69,6 +69,9 @@ def get_poem_id(repository, pull_id):
         print(issue_json)
         return ERROR
 
+    from pprint import pprint
+    pprint(issue_json)
+
     issue_body = json.loads(issue_json)["body"]
 
     poem_id = ""
