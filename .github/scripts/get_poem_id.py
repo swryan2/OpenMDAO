@@ -63,6 +63,7 @@ def get_poem_id(repository, pull_id):
     print(f"Checking Issue #{issue_id} for associated POEM...")
     print("-------------------------------------------------------------------------------")
 
+    repository.replace('swryan', 'OpenMDAO')
     try:
         p = subprocess.run(["gh", "--repo", repository, "issue", "view", "--json", "body", issue_id],
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
