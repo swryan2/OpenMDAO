@@ -294,6 +294,7 @@ jobs:
           echo "TMPDIR=/tmp" >> $GITHUB_ENV
 
       - name: Install pyOptSparse
+        id: pyoptsparse
         if: matrix.PYOPTSPARSE
         run: |
           echo "============================================================="
@@ -340,6 +341,30 @@ jobs:
             fi
 
             build_pyoptsparse -v $BRANCH $PAROPT $SNOPT
+          fi
+
+      - name: Display pyoptsparse build log
+        if: failure() && steps.pyoptsparse.outcome == 'failure'
+        run: |
+          for f in $(find /tmp/ -name 'meson-log.txt'); do
+            echo "============================================================="
+            echo $f
+            echo "============================================================="
+            cat $f
+          done
+          if test -d /private/var/folders; then
+            for f in $(find /private/var/folders/ -name 'meson-log.txt'); do
+              echo "============================================================="
+              echo $f
+              echo "============================================================="
+              cat $f
+            done
+            for f in $(find /private/var/folders/ -name 'compile.log'); do
+              echo "============================================================="
+              echo $f
+              echo "============================================================="
+              cat $f
+            done
           fi
 
       - name: Install optional dependencies
