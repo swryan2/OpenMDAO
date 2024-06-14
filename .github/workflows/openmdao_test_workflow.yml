@@ -118,6 +118,7 @@ jobs:
             PY: '3.12'
             NUMPY: '1.26'
             SCIPY: '1.13'
+            BREW: true
             PETSc: '3.20'
             PYOPTSPARSE: 'v2.11.0'
             PAROPT: true
@@ -237,7 +238,11 @@ jobs:
       - name: Install MacOS-specific dependencies
         if: matrix.OS == 'macos-13' || matrix.OS == 'macos-14'
         run: |
-          conda install swig
+          if [[ "${{ matrix.BREW }}" ]]; then
+            brew install swig gcc meson
+          else
+            conda install compilers cython swig -q -y
+          fi
 
       - name: Install PETSc
         if: matrix.PETSc
