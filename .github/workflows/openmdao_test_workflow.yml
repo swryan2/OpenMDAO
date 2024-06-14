@@ -235,7 +235,7 @@ jobs:
           fi
 
       - name: Install MacOS-specific dependencies
-        if: matrix.OS == 'macos-13'
+        if: matrix.OS == 'macos-13' || matrix.OS == 'macos-14'
         run: |
           conda install swig
 
