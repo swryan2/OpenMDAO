@@ -26,7 +26,7 @@ from openmdao.utils.mpi import MPI, multi_proc_exception_check
 from openmdao.utils.options_dictionary import OptionsDictionary
 from openmdao.utils.record_util import create_local_meta, check_path, has_match
 from openmdao.utils.units import is_compatible, unit_conversion, simplify_unit
-from openmdao.utils.variable_table import write_var_table
+from openmdao.utils.variable_table import write_var_table, NA
 from openmdao.utils.array_utils import evenly_distrib_idxs, shape_to_len
 from openmdao.utils.name_maps import name2abs_name, name2abs_names
 from openmdao.utils.coloring import _compute_coloring, Coloring, \
@@ -36,11 +36,10 @@ from openmdao.utils.indexer import indexer
 from openmdao.utils.om_warnings import issue_warning, \
     DerivativesWarning, PromotionWarning, UnusedOptionWarning, UnitsWarning, warn_deprecation
 from openmdao.utils.general_utils import determine_adder_scaler, \
-    format_as_float_or_array, all_ancestors, make_set, match_prom_or_abs, \
+    format_as_float_or_array, all_ancestors, match_prom_or_abs, \
     ensure_compatible, env_truthy, make_traceback, _is_slicer_op
 from openmdao.approximation_schemes.complex_step import ComplexStep
 from openmdao.approximation_schemes.finite_difference import FiniteDifference
-from openmdao.core.total_jac import _TotalJacInfo
 
 _empty_frozen_set = frozenset()
 
@@ -3499,7 +3498,7 @@ class System(object):
 
         return key
 
-    def _check_voi_meta_sizes(self, typename, meta, names):
+    def _check_voi_meta_sizes(self, typename, name, meta, names):
         """
         Check that sizes of named metadata agree with meta['size'].
 
@@ -3507,6 +3506,8 @@ class System(object):
         ----------
         typename : str
             'design var', 'objective', or 'constraint'
+        name : str
+            The name of the variable.  May be an alias.
         meta : dict
             Metadata dictionary.
         names : list of str
@@ -3517,7 +3518,7 @@ class System(object):
             for mname in names:
                 val = meta[mname]
                 if isinstance(val, np.ndarray) and size != val.size:
-                    raise ValueError(f"{self.msginfo}: When adding {typename} '{meta['name']}',"
+                    raise ValueError(f"{self.msginfo}: When adding {typename} '{name}',"
                                      f" {mname} should have size {size} but instead has size "
                                      f"{val.size}.")
 
@@ -3546,7 +3547,7 @@ class System(object):
         """
         out = {}
         try:
-            for data in self._design_vars.values():
+            for name, data in self._design_vars.items():
                 if 'parallel_deriv_color' in data and data['parallel_deriv_color'] is not None:
                     self._problem_meta['has_par_deriv_color'] = True
 
@@ -3554,7 +3555,8 @@ class System(object):
                                            use_prom_ivc=use_prom_ivc)
                 if get_sizes and data['source'] in self._var_allprocs_abs2idx:
                     self._check_voi_meta_sizes(
-                        'design var', data, ['ref', 'ref0', 'scaler', 'adder', 'upper', 'lower'])
+                        'design var', name, data,
+                        ['ref', 'ref0', 'scaler', 'adder', 'upper', 'lower'])
 
                 out[key] = data
 
@@ -3609,7 +3611,7 @@ class System(object):
             key = src_name
 
         meta['source'] = src_name
-        meta['distributed'] = \
+        meta['distributed'] = dist = \
             src_name in abs2meta_out and abs2meta_out[src_name]['distributed']
 
         if get_size:
@@ -3626,7 +3628,10 @@ class System(object):
                     indices = indices.shaped_instance()
                     meta['size'] = meta['global_size'] = indices.indexed_src_size
                 else:
-                    meta['size'] = sizes[owning_rank[src_name], abs2idx[src_name]]
+                    if dist:
+                        meta['size'] = sizes[self.comm.rank, abs2idx[src_name]]
+                    else:
+                        meta['size'] = sizes[owning_rank[src_name], abs2idx[src_name]]
                     meta['global_size'] = out_meta['global_size']
             else:
                 meta['size'] = meta['global_size'] = 0  # discrete var, don't know size
@@ -3661,17 +3666,17 @@ class System(object):
         out = {}
         try:
             # keys of self._responses are the alias or the promoted name
-            for data in self._responses.values():
-                if 'parallel_deriv_color' in data and data['parallel_deriv_color'] is not None:
+            for name, meta in self._responses.items():
+                if 'parallel_deriv_color' in meta and meta['parallel_deriv_color'] is not None:
                     self._problem_meta['has_par_deriv_color'] = True
 
-                key = self._update_response_meta(data, get_size=get_sizes,
+                key = self._update_response_meta(meta, get_size=get_sizes,
                                                  use_prom_ivc=use_prom_ivc)
                 if get_sizes:
                     self._check_voi_meta_sizes(
-                        resp_types[data['type']], data, resp_size_checks[data['type']])
+                        resp_types[meta['type']], name, meta, resp_size_checks[meta['type']])
 
-                out[key] = data
+                out[key] = meta
 
         except KeyError as err:
             raise RuntimeError(f"{self.msginfo}: Output not found for response {err}.")
@@ -3747,7 +3752,7 @@ class System(object):
 
     def get_io_metadata(self, iotypes=('input', 'output'), metadata_keys=None,
                         includes=None, excludes=None, is_indep_var=None, is_design_var=None,
-                        tags=(), get_remote=False, rank=None,
+                        tags=None, get_remote=False, rank=None,
                         return_rel_names=True):
         """
         Retrieve metadata for a filtered list of variables.
@@ -3794,7 +3799,7 @@ class System(object):
             A dict of metadata keyed on name, where name is either absolute or relative
             based on the value of the `return_rel_names` arg, and metadata is a dict containing
             entries based on the value of the metadata_keys arg.  Every metadata dict will
-            always contain two entries, 'promoted_name' and 'discrete', to indicate a given
+            always contain two entries, 'prom_name' and 'discrete', to indicate a given
             variable's promoted name and whether or not it is discrete.
         """
         prefix = self.pathname + '.' if self.pathname else ''
@@ -3815,6 +3820,8 @@ class System(object):
             includes = (includes,)
         if isinstance(excludes, str):
             excludes = (excludes,)
+        if isinstance(tags, str):
+            tags = {tags}
 
         gather_keys = {'val', 'src_indices'}
         need_gather = get_remote and self.comm is not None and self.comm.size > 1
@@ -3834,9 +3841,6 @@ class System(object):
             metadict = all2meta
             disc_metadict = self._var_allprocs_discrete
             need_gather = False  # we can get everything from 'allprocs' dict without gathering
-
-        if tags:
-            tagset = make_set(tags)
 
         result = {}
 
@@ -3875,7 +3879,7 @@ class System(object):
                             try:
                                 ret_meta[key] = meta[key]
                             except KeyError:
-                                ret_meta[key] = 'Unavailable'
+                                ret_meta[key] = NA
 
                 if need_gather:
                     if distrib or abs_name in self._vars_to_gather:
@@ -3945,8 +3949,16 @@ class System(object):
                             continue
 
                     # handle tags
-                    if tags and not tagset & ret_meta['tags']:
-                        continue
+                    if tags:
+                        meta_tags = ret_meta.get('tags', {})
+                        match_tag = False
+                        for tag in tags:
+                            for meta_tag in meta_tags:
+                                if fnmatchcase(meta_tag, tag):
+                                    match_tag = True
+                                    break
+                        if not match_tag:
+                            continue
 
                     ret_meta['prom_name'] = prom
                     ret_meta['discrete'] = abs_name not in all2meta[iotype]
@@ -3959,7 +3971,6 @@ class System(object):
         return result
 
     def list_vars(self,
-                  explicit=True, implicit=True,
                   val=True,
                   prom_name=True,
                   residuals=False,
@@ -3972,6 +3983,7 @@ class System(object):
                   desc=False,
                   print_arrays=False,
                   tags=None,
+                  print_tags=False,
                   includes=None,
                   excludes=None,
                   is_indep_var=None,
@@ -3987,10 +3999,6 @@ class System(object):
 
         Parameters
         ----------
-        explicit : bool, optional
-            Include outputs from explicit components. Default is True.
-        implicit : bool, optional
-            Include outputs from implicit components. Default is True.
         val : bool, optional
             When True, display output values. Default is True.
         prom_name : bool, optional
@@ -4024,6 +4032,8 @@ class System(object):
             User defined tags that can be used to filter what gets listed. Only outputs with the
             given tags will be listed.
             Default is None, which means there will be no filtering based on tags.
+        print_tags : bool
+            When true, display tags in the columnar display.
         includes : None, str, or iter of str
             Collection of glob patterns for pathnames of variables to include. Default is None,
             which includes all output variables.
@@ -4070,7 +4080,7 @@ class System(object):
                              "must be a string value of 'list' or 'dict'")
 
         keynames = ['val', 'units', 'shape', 'global_shape', 'desc', 'tags']
-        keyflags = [val, units, shape, global_shape, desc, tags]
+        keyflags = [val, units, shape, global_shape, desc, tags or print_tags]
 
         keys = [name for i, name in enumerate(keynames) if keyflags[i]]
 
@@ -4087,7 +4097,7 @@ class System(object):
 
         metavalues = val and self._inputs is None
 
-        keyvals = [metavalues, units, shape, global_shape, desc, tags is not None]
+        keyvals = [metavalues, units, shape, global_shape, desc, tags or print_tags]
         keys = [n for i, n in enumerate(keynames) if keyvals[i]]
 
         inputs = self.get_io_metadata(('input',), keys, includes, excludes,
@@ -4148,62 +4158,41 @@ class System(object):
                         meta['max'] = np.round(np.max(meta['val']), np_precision)
 
         # NOTE: calls to _abs_get_val() above are collective calls and must be done on all procs
-        if not (outputs and inputs) or (not all_procs and self.comm.rank != 0):
-            return []
+        if not (outputs or inputs) or (not all_procs and self.comm.rank != 0):
+            return {} if return_format == 'dict' else []
 
         # remove metadata we don't want to show/return
         to_remove = ['discrete']
-        if tags:
+        if not print_tags:
             to_remove.append('tags')
         if not prom_name:
             to_remove.append('prom_name')
-        for _, meta in outputs.items():
+        for _, meta in chain(outputs.items(), inputs.items()):
             for key in to_remove:
-                del meta[key]
-        for _, meta in inputs.items():
-            for key in to_remove:
-                del meta[key]
+                try:
+                    del meta[key]
+                except KeyError:
+                    pass
 
         variables = set(outputs.keys()).union(set(inputs.keys()))
         var_list = []
         var_dict = {}
 
-        real_vars = self._var_allprocs_abs2meta
-        disc_vars = self._var_allprocs_discrete
-
-        if self._subsystems_allprocs:
-            from openmdao.core.component import Component
-            for subsys in self.system_iter(recurse=True, typ=Component):
-                prefix = subsys.pathname + '.'
-                for var_name in chain(real_vars['input'], real_vars['output'],
-                                      disc_vars['input'], disc_vars['output']):
-                    if var_name in variables:
-                        if var_name.startswith(prefix):
-                            var_list.append(var_name)
-                            if var_name in outputs:
-                                var_dict[var_name] = outputs[var_name]
-                                var_dict[var_name]['io'] = 'output'
-                            else:
-                                var_dict[var_name] = inputs[var_name]
-                                var_dict[var_name]['io'] = 'input'
-        else:
-            # For components with no children, self._subsystems_allprocs is empty.
-            for var_name in chain(real_vars['input'], real_vars['output'],
-                                  disc_vars['input'], disc_vars['output']):
-                if var_name in variables:
-                    var_list.append(var_name)
-                    if var_name in outputs:
-                        var_dict[var_name] = outputs[var_name]
-                        var_dict[var_name]['io'] = 'output'
-                    else:
-                        var_dict[var_name] = inputs[var_name]
-                        var_dict[var_name]['io'] = 'input'
+        var_list = self._get_vars_exec_order(inputs=True, outputs=True,
+                                             variables=variables, local=True)
+        for var_name in var_list:
+            if var_name in outputs:
+                var_dict[var_name] = outputs[var_name]
+                var_dict[var_name]['io'] = 'output'
+            else:
+                var_dict[var_name] = inputs[var_name]
+                var_dict[var_name]['io'] = 'input'
 
         if all_procs or self.comm.rank == 0:
             write_var_table(self.pathname, var_list, 'all', var_dict,
-                            True, '', print_arrays, out_stream)
+                            True, print_arrays, out_stream)
 
-        return var_dict
+        return var_dict if return_format == 'dict' else list(var_dict.items())
 
     def list_inputs(self,
                     val=True,
@@ -4215,6 +4204,7 @@ class System(object):
                     hierarchical=True,
                     print_arrays=False,
                     tags=None,
+                    print_tags=False,
                     includes=None,
                     excludes=None,
                     is_indep_var=None,
@@ -4254,6 +4244,8 @@ class System(object):
             User defined tags that can be used to filter what gets listed. Only inputs with the
             given tags will be listed.
             Default is None, which means there will be no filtering based on tags.
+        print_tags : bool
+            When true, display tags in the columnar display.
         includes : None, str, or iter of str
             Collection of glob patterns for pathnames of variables to include. Default is None,
             which includes all input variables.
@@ -4294,14 +4286,13 @@ class System(object):
                           "any `set_val` calls.")
 
         if return_format not in ('list', 'dict'):
-            badarg = f"'{return_format}'" if isinstance(return_format, str) else f"{return_format}"
-            raise ValueError(f"Invalid value ({badarg}) for return_format, "
+            raise ValueError(f"Invalid value ({return_format}) for return_format, "
                              "must be a string value of 'list' or 'dict'")
 
         metavalues = val and self._inputs is None
 
         keynames = ['val', 'units', 'shape', 'global_shape', 'desc', 'tags']
-        keyvals = [metavalues, units, shape, global_shape, desc, tags is not None]
+        keyvals = [metavalues, units, shape, global_shape, desc, tags or print_tags]
         keys = [n for i, n in enumerate(keynames) if keyvals[i]]
 
         inputs = self.get_io_metadata(('input',), keys, includes, excludes,
@@ -4309,16 +4300,6 @@ class System(object):
                                       get_remote=True,
                                       rank=None if all_procs or val else 0,
                                       return_rel_names=False)
-
-        if inputs:
-            to_remove = ['discrete']
-            if tags:
-                to_remove.append('tags')
-            if not prom_name:
-                to_remove.append('prom_name')
-            for _, meta in inputs.items():
-                for key in to_remove:
-                    del meta[key]
 
         if val and self._inputs is not None:
             # we want value from the input vector, not from the metadata
@@ -4335,11 +4316,21 @@ class System(object):
                     if print_max:
                         meta['max'] = np.round(np.max(meta['val']), np_precision)
 
+        # NOTE: calls to _abs_get_val() above are collective calls and must be done on all procs
         if not inputs or (not all_procs and self.comm.rank != 0):
-            if return_format == 'dict':
-                return {}
-            else:
-                return []
+            return {} if return_format == 'dict' else []
+
+        to_remove = ['discrete']
+        if not print_tags:
+            to_remove.append('tags')
+        if not prom_name:
+            to_remove.append('prom_name')
+        for _, meta in inputs.items():
+            for key in to_remove:
+                try:
+                    del meta[key]
+                except KeyError:
+                    pass
 
         if out_stream:
             self._write_table('input', inputs, hierarchical, print_arrays, all_procs,
@@ -4352,10 +4343,7 @@ class System(object):
         else:
             inputs = list(inputs.items())
 
-        if return_format == 'dict':
-            return dict(inputs)
-        else:
-            return inputs
+        return dict(inputs) if return_format == 'dict' else inputs
 
     def list_outputs(self,
                      explicit=True, implicit=True,
@@ -4372,6 +4360,7 @@ class System(object):
                      hierarchical=True,
                      print_arrays=False,
                      tags=None,
+                     print_tags=False,
                      includes=None,
                      excludes=None,
                      is_indep_var=None,
@@ -4426,6 +4415,8 @@ class System(object):
             User defined tags that can be used to filter what gets listed. Only outputs with the
             given tags will be listed.
             Default is None, which means there will be no filtering based on tags.
+        print_tags : bool
+            When true, display tags in the columnar display.
         includes : None, str, or iter of str
             Collection of glob patterns for pathnames of variables to include. Default is None,
             which includes all output variables.
@@ -4466,7 +4457,7 @@ class System(object):
                              "must be a string value of 'list' or 'dict'")
 
         keynames = ['val', 'units', 'shape', 'global_shape', 'desc', 'tags']
-        keyflags = [val, units, shape, global_shape, desc, tags]
+        keyflags = [val, units, shape, global_shape, desc, tags or print_tags]
 
         keys = [name for i, name in enumerate(keynames) if keyflags[i]]
 
@@ -4519,17 +4510,20 @@ class System(object):
 
         # NOTE: calls to _abs_get_val() above are collective calls and must be done on all procs
         if not outputs or (not all_procs and self.comm.rank != 0):
-            return []
+            return {} if return_format == 'dict' else []
 
         # remove metadata we don't want to show/return
         to_remove = ['discrete']
-        if tags:
+        if not print_tags:
             to_remove.append('tags')
         if not prom_name:
             to_remove.append('prom_name')
         for _, meta in outputs.items():
             for key in to_remove:
-                del meta[key]
+                try:
+                    del meta[key]
+                except KeyError:
+                    pass
 
         rel_idx = len(self.pathname) + 1 if self.pathname else 0
 
@@ -4574,10 +4568,7 @@ class System(object):
         else:
             raise RuntimeError('You have excluded both Explicit and Implicit components.')
 
-        if return_format == 'dict':
-            return dict(outputs)
-        else:
-            return outputs
+        return dict(outputs) if return_format == 'dict' else outputs
 
     def _write_table(self, var_type, var_data, hierarchical, print_arrays, all_procs, out_stream):
         """
@@ -4608,18 +4599,16 @@ class System(object):
 
         if self._outputs is None:
             var_list = var_data.keys()
-            top_name = self.name
         else:
             inputs = var_type == 'input'
             outputs = not inputs
             var_list = self._get_vars_exec_order(inputs=inputs, outputs=outputs, variables=var_data)
-            top_name = self.name if self.name else 'model'
 
         if all_procs or self.comm.rank == 0:
             write_var_table(self.pathname, var_list, var_type, var_data,
-                            hierarchical, top_name, print_arrays, out_stream)
+                            hierarchical, print_arrays, out_stream)
 
-    def _get_vars_exec_order(self, inputs=False, outputs=False, variables=None):
+    def _get_vars_exec_order(self, inputs=False, outputs=False, variables=None, local=False):
         """
         Get list of variable names in execution order, based on the order subsystems were setup.
 
@@ -4632,6 +4621,8 @@ class System(object):
         variables : Collection (list or dict)
             Absolute path names of the subset of variables to include.
             If None then all variables will be included. Default is None.
+        local : bool, optional
+            Get variables from local subsystems only. Default is False.
 
         Returns
         -------
@@ -4643,26 +4634,35 @@ class System(object):
         real_vars = self._var_allprocs_abs2meta
         disc_vars = self._var_allprocs_discrete
 
-        in_or_out = []
+        # variable order: real inputs, real outputs, discrete inputs, discrete outputs
+        var_dicts = []
         if inputs:
-            in_or_out.append('input')
+            var_dicts.append(real_vars['input'])
         if outputs:
-            in_or_out.append('output')
+            var_dicts.append(real_vars['output'])
+        if inputs:
+            var_dicts.append(disc_vars['input'])
+        if outputs:
+            var_dicts.append(disc_vars['output'])
 
+        # For components with no children, self._subsystems_allprocs is empty.
         if self._subsystems_allprocs:
-            for subsys, _ in self._subsystems_allprocs.values():
+            if local:
+                from openmdao.core.component import Component
+                it = self.system_iter(recurse=True, typ=Component)
+            else:
+                it = iter(subsys for subsys, _ in self._subsystems_allprocs.values())
+
+            for subsys in it:
                 prefix = subsys.pathname + '.'
-                for io in in_or_out:
-                    for var_name in chain(real_vars[io], disc_vars[io]):
-                        if variables is None or var_name in variables:
-                            if var_name.startswith(prefix):
-                                var_list.append(var_name)
-        else:
-            # For components with no children, self._subsystems_allprocs is empty.
-            for io in in_or_out:
-                for var_name in chain(real_vars[io], disc_vars[io]):
+                for var_name in chain(*var_dicts):
                     if not variables or var_name in variables:
-                        var_list.append(var_name)
+                        if var_name.startswith(prefix):
+                            var_list.append(var_name)
+        else:
+            for var_name in chain(*var_dicts):
+                if variables is None or var_name in variables:
+                    var_list.append(var_name)
 
         return var_list
 
@@ -4709,7 +4709,7 @@ class System(object):
         with self._scaled_context_all():
             self._solve_linear(mode)
 
-    def run_linearize(self, sub_do_ln=True, driver=None):
+    def run_linearize(self, sub_do_ln=True):
         """
         Compute jacobian / factorization.
 
@@ -4719,22 +4719,12 @@ class System(object):
         ----------
         sub_do_ln : bool
             Flag indicating if the children should call linearize on their linear solvers.
-        driver : Driver or None
-            If this system is the top level system and approx derivatives have not been
-            initialized, the driver for this model must be supplied in order to properly
-            initialize the approximations.
         """
-        if self.pathname == '' and self._owns_approx_jac and driver is not None:
-            self._tot_jac = _TotalJacInfo(driver._problem(), None, None, 'flat_dict', approx=True)
-
-        try:
-            with self._scaled_context_all():
-                self._linearize(self._assembled_jac, sub_do_ln=self._linear_solver is not None and
-                                self._linear_solver._linearize_children())
-                if self._linear_solver is not None and sub_do_ln:
-                    self._linear_solver._linearize()
-        finally:
-            self._tot_jac = None
+        with self._scaled_context_all():
+            self._linearize(self._assembled_jac, sub_do_ln=self._linear_solver is not None and
+                            self._linear_solver._linearize_children())
+            if self._linear_solver is not None and sub_do_ln:
+                self._linear_solver._linearize()
 
     def _apply_nonlinear(self):
         """
@@ -5004,7 +4994,7 @@ class System(object):
             if self._assembled_jac:
                 self._assembled_jac.set_complex_step_mode(active)
 
-        for sub in self.system_iter(include_self=False, recurse=True):
+        for sub in self._subsystems_myproc:
             sub._set_complex_step_mode(active)
 
     def cleanup(self):
@@ -5353,26 +5343,28 @@ class System(object):
         indices : int or list of ints or tuple of ints or int ndarray or Iterable or None, optional
             Indices or slice to set.
         """
-        model = self._problem_meta['model_ref']()
-        conns = model._conn_global_abs_in2out
-        post_setup = self._problem_meta['setup_status'] >= _SetupStatus.POST_SETUP
+        post_setup = self._problem_meta is not None and \
+            self._problem_meta['setup_status'] >= _SetupStatus.POST_SETUP
+        if post_setup:
+            abs_names = name2abs_names(self, name)
+        else:
+            raise RuntimeError(f"{self.msginfo}: Called set_val({name}, ...) before setup "
+                               "completes.")
+
         has_vectors = self._problem_meta['setup_status'] >= _SetupStatus.POST_FINAL_SETUP
         value = val
+
+        model = self._problem_meta['model_ref']()
+        conns = model._conn_global_abs_in2out
 
         all_meta = model._var_allprocs_abs2meta
         loc_meta = model._var_abs2meta
         n_proms = 0  # if nonzero, name given was promoted input name w/o a matching prom output
 
         try:
-            ginputs = model._group_inputs
+            ginputs = self._group_inputs
         except AttributeError:
-            ginputs = {}  # could happen if top level system is not a Group
-
-        if post_setup:
-            abs_names = name2abs_names(self, name)
-        else:
-            raise RuntimeError(f"{self.msginfo}: Called set_val({name}, ...) before setup "
-                               "completes.")
+            ginputs = {}  # could happen if this system is not a Group
 
         if abs_names:
             n_proms = len(abs_names)  # for output this will never be > 1
@@ -6153,12 +6145,13 @@ class System(object):
             # to avoid a confusing KeyError
             return (0,)
         high_dims = shape[1:]
+        sz = shape_to_len(shape)
         with multi_proc_exception_check(self.comm):
             if high_dims:
                 high_size = shape_to_len(high_dims)
 
                 dim_size_match = bool(global_size % high_size == 0)
-                if dim_size_match is False:
+                if dim_size_match is False and sz > 0:
                     raise RuntimeError(f"{self.msginfo}: All but the first dimension of the "
                                        "shape's local parts in a distributed variable must match "
                                        f"across processes. For output '{abs_name}', local shape "

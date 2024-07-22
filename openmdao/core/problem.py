@@ -282,7 +282,7 @@ class Problem(object):
 
         self.comm = comm
 
-        self._metadata = None
+        self._metadata = {'setup_status': _SetupStatus.PRE_SETUP}
         self._run_counter = -1
         self._rec_mgr = RecordingManager()
 
@@ -356,7 +356,11 @@ class Problem(object):
         reports_dirpath = pathlib.Path(get_reports_dir()).joinpath(f'{self._name}')
         if self.comm.rank == 0:
             if os.path.isdir(reports_dirpath):
-                shutil.rmtree(reports_dirpath)
+                try:
+                    shutil.rmtree(reports_dirpath)
+                except FileNotFoundError:
+                    # Folder already removed by another proccess
+                    pass
 
         # register hooks for any reports
         activate_reports(self._reports, self)
@@ -469,7 +473,7 @@ class Problem(object):
         bool
             True if the named system or variable is local to this process.
         """
-        if self._metadata is None:
+        if self._metadata['setup_status'] < _SetupStatus.POST_SETUP:
             raise RuntimeError(f"{self.msginfo}: is_local('{name}') was called before setup() "
                                "completed.")
 
@@ -652,9 +656,13 @@ class Problem(object):
                                ": Before calling `run_model`, the `setup` method must be called "
                                "if set_output_solver_options has been called.")
 
-        if self._mode is None:
-            raise RuntimeError(self.msginfo +
-                               ": The `setup` method must be called before `run_model`.")
+        if self._metadata['setup_status'] < _SetupStatus.POST_SETUP:
+            if self.model._order_set:
+                raise RuntimeError(f"{self.msginfo}: Cannot call set_order without calling setup "
+                                   "after")
+            else:
+                raise RuntimeError(self.msginfo +
+                                   ": The `setup` method must be called before `run_model`.")
 
         old_prefix = self._recording_iter.prefix
 
@@ -699,7 +707,7 @@ class Problem(object):
         model = self.model
         driver = self.driver
 
-        if self._mode is None:
+        if self._metadata['setup_status'] < _SetupStatus.POST_SETUP:
             raise RuntimeError(self.msginfo +
                                ": The `setup` method must be called before `run_driver`.")
 
@@ -1044,7 +1052,13 @@ class Problem(object):
         """
         driver = self.driver
 
-        response_size, desvar_size = driver._update_voi_meta(self.model)
+        responses = self.model.get_responses(recurse=True, use_prom_ivc=True)
+        designvars = self.model.get_design_vars(recurse=True, use_prom_ivc=True)
+
+        if self._metadata['setup_status'] < _SetupStatus.POST_FINAL_SETUP:
+            self.model._final_setup()
+
+        response_size, desvar_size = driver._update_voi_meta(self.model, responses, designvars)
 
         # update mode if it's been set to 'auto'
         if self._orig_mode == 'auto':
@@ -1053,9 +1067,6 @@ class Problem(object):
             mode = self._orig_mode
 
         self._metadata['mode'] = mode
-
-        if self._metadata['setup_status'] < _SetupStatus.POST_FINAL_SETUP:
-            self.model._final_setup()
 
         # If set_solver_print is called after an initial run, in a multi-run scenario,
         #  this part of _final_setup still needs to happen so that change takes effect
@@ -1554,7 +1565,7 @@ class Problem(object):
                     # prevent adding multiple approxs with same wrt (and confusing users with
                     # warnings)
                     if abs_key[1] not in added_wrts:
-                        approximations[fd_options['method']].add_approximation(abs_key, self.model,
+                        approximations[fd_options['method']].add_approximation(abs_key, comp,
                                                                                fd_options,
                                                                                vector=vector)
                         added_wrts.add(abs_key[1])
@@ -1760,8 +1771,7 @@ class Problem(object):
             if not self.driver._responses:
                 raise RuntimeError("Driver is not providing any response variables "
                                    "for compute_totals.")
-            lcons = [n for n, meta in self.driver._cons.items()
-                     if ('linear' in meta and meta['linear'])]
+            lcons = [n for n, meta in self.driver._cons.items() if meta['linear']]
             if lcons:
                 # if driver has linear constraints, construct a full list of driver responses
                 # in order to avoid using any driver coloring that won't include the linear
@@ -2341,6 +2351,8 @@ class Problem(object):
         prom2abs_out = model._var_allprocs_prom2abs_list['output']
         abs2meta_in = model._var_allprocs_abs2meta['input']
         abs2meta_out = model._var_allprocs_abs2meta['output']
+        abs2meta_disc_in = model._var_allprocs_discrete['input']
+        abs2meta_disc_out = model._var_allprocs_discrete['output']
 
         if inputs:
             for name in inputs:
@@ -2363,9 +2375,12 @@ class Problem(object):
                                 val = case.inputs[abs_name]
                             else:
                                 val = case.inputs[case_abs_names[0]]
-
-                        varmeta = abs2meta_in[abs_name]
-                        if varmeta['distributed'] and model.comm.size > 1:
+                        try:
+                            varmeta = abs2meta_in[abs_name]
+                        except KeyError:
+                            # Var may be discrete
+                            varmeta = abs2meta_disc_in[abs_name]
+                        if varmeta.get('distributed') and model.comm.size > 1:
                             sizes = model._var_sizes['input'][:, abs2idx[abs_name]]
                             model.set_val(abs_name, scatter_dist_to_local(val, model.comm, sizes))
                         else:
@@ -2382,10 +2397,10 @@ class Problem(object):
                 # auto_ivc output may point to a promoted input name
                 if name in prom2abs_out:
                     prom2abs = prom2abs_out
-                    abs2meta = abs2meta_out
+                    is_output = True
                 else:
                     prom2abs = prom2abs_in
-                    abs2meta = abs2meta_in
+                    is_output = False
 
                 if name in prom2abs:
                     if isinstance(case, dict):
@@ -2397,12 +2412,22 @@ class Problem(object):
                         if set_later(abs_name):
                             continue
 
-                        varmeta = abs2meta[abs_name]
-                        if varmeta['distributed'] and model.comm.size > 1:
+                        if is_output:
+                            try:
+                                varmeta = abs2meta_out[abs_name]
+                            except KeyError:
+                                varmeta = abs2meta_disc_out[abs_name]
+                        else:
+                            try:
+                                varmeta = abs2meta_in[abs_name]
+                            except KeyError:
+                                varmeta = abs2meta_disc_in[abs_name]
+                        if varmeta.get('distributed') and model.comm.size > 1:
                             sizes = model._var_sizes['output'][:, abs2idx[abs_name]]
                             model.set_val(abs_name, scatter_dist_to_local(val, model.comm, sizes))
                         else:
                             model.set_val(abs_name, val)
+
                 else:
                     issue_warning(f"{model.msginfo}: Output variable, '{name}', recorded "
                                   "in the case is not found in the model.")
