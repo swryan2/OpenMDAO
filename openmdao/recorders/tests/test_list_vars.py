@@ -40,6 +40,52 @@ class ListVarsTest(unittest.TestCase):
 
         self.assertEqual(str(cm.exception), msg)
 
+    def test_not_recorded(self):
+        """
+        Test proper handling of things that were not recorded.
+        """
+
+        prob = ParaboloidProblem()
+        model = prob.model
+        driver = prob.driver
+
+        rec = om.SqliteRecorder('test_not_recorded.db')
+
+        prob.add_recorder(rec)
+        # prob.recording_options['record_desvars'] = False
+        prob.recording_options['record_objectives'] = False
+        prob.recording_options['record_constraints'] = False
+        # residuals and derivatives are not recorded by default
+        prob.recording_options['record_abs_error'] = False
+        prob.recording_options['record_rel_error'] = False
+
+        model.add_recorder(rec)
+        model.recording_options['record_inputs'] = False
+        model.recording_options['record_outputs'] = False
+        model.recording_options['record_residuals'] = False
+
+        driver.add_recorder(rec)
+        driver.recording_options['record_inputs'] = False
+        driver.recording_options['record_outputs'] = False
+        driver.recording_options['record_desvars'] = False
+        driver.recording_options['record_objectives'] = False
+        driver.recording_options['record_constraints'] = False
+        # residuals and derivatives are not recorded by default
+
+        prob.setup()
+        prob.run_driver()
+        prob.record('final')
+
+        cases = om.CaseReader('test_not_recorded.db')
+        prob_case = cases.get_case(cases.list_cases('problem', out_stream=None)[0])
+        drvr_case = cases.get_case(cases.list_cases('driver', out_stream=None)[0])
+        modl_case = cases.get_case(cases.list_cases('root', out_stream=None)[0])
+
+        prob.model.list_vars(is_design_var=True)
+        prob_case.list_vars(is_design_var=True)
+
+        # modl_case.list_inputs()
+
     def test_list_outputs(self):
         """
         Confirm that includes/excludes has the same result between System.list_inputs() and
