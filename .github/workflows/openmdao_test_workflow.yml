@@ -114,7 +114,7 @@ jobs:
 
           # test baseline versions on MacOS/ARM
           - NAME: MacOS ARM
-            OS: macos-14
+            OS: macos-latest
             PY: '3.12'
             NUMPY: '1.26'
             SCIPY: '1.13'
@@ -232,10 +232,13 @@ jobs:
           fi
 
       - name: Install MacOS-specific dependencies
-        if: matrix.OS == 'macos-13' || matrix.OS == 'macos-14'
+        if: matrix.OS == 'macos-13' || matrix.OS == 'macos-latest'
         run: |
           if [[ "${{ matrix.BREW }}" ]]; then
             brew install swig gcc meson
+            if [[ "${{ matrix.OS }}" == "macos-latest" ]]; then
+              ln -s /opt/homebrew/bin/gfortran-13 /opt/homebrew/bin/gfortran
+            fi
           else
             conda install compilers cython swig -q -y
           fi
@@ -243,27 +246,35 @@ jobs:
       - name: Install PETSc
         if: matrix.PETSc
         run: |
-          echo "============================================================="
-          echo "Install compilers for PETSc"
-          echo "============================================================="
-          if [[ "${{ matrix.OPENMPI }}" ]]; then
-            COMPILERS="cython compilers openmpi-mpicc=${{ matrix.OPENMPI }}"
-          else
-            COMPILERS="cython compilers openmpi-mpicc"
-          fi
-          conda install $COMPILERS -q -y
-
-          echo "============================================================="
-          echo "Install PETSc"
-          echo "============================================================="
-          if [[ "${{ matrix.PETSc }}" == "3" ]]; then
-            python -m pip install git+https://github.com/mpi4py/mpi4py
+          if [[ "${{ matrix.BREW }}" ]]; then
+            echo "============================================================="
+            echo "Install PETSc with BREW"
+            echo "============================================================="
+            brew install open-mpi mpi4py
             python -m pip install petsc petsc4py
           else
-            if [[ "${{ matrix.MPI4PY }}" ]]; then
-              conda install mpi4py=${{ matrix.MPI4PY }} petsc4py=${{ matrix.PETSc }} -q -y
+            echo "============================================================="
+            echo "Install compilers for PETSc"
+            echo "============================================================="
+            if [[ "${{ matrix.OPENMPI }}" ]]; then
+              COMPILERS="cython compilers openmpi-mpicc=${{ matrix.OPENMPI }}"
             else
-              conda install mpi4py petsc4py=${{ matrix.PETSc }} -q -y
+              COMPILERS="cython compilers openmpi-mpicc"
+            fi
+            conda install $COMPILERS -q -y
+
+            echo "============================================================="
+            echo "Install PETSc"
+            echo "============================================================="
+            if [[ "${{ matrix.PETSc }}" == "3" ]]; then
+              python -m pip install git+https://github.com/mpi4py/mpi4py
+              python -m pip install petsc petsc4py
+            else
+              if [[ "${{ matrix.MPI4PY }}" ]]; then
+                conda install mpi4py=${{ matrix.MPI4PY }} petsc4py=${{ matrix.PETSc }} -q -y
+              else
+                conda install mpi4py petsc4py=${{ matrix.PETSc }} -q -y
+              fi
             fi
           fi
 
