@@ -119,6 +119,7 @@ jobs:
             NUMPY: '1.26'
             SCIPY: '1.13'
             BREW: true
+            XCODE: '14.2'
             PETSc: '3.20'
             PYOPTSPARSE: 'v2.11.0'
             PAROPT: true
@@ -241,6 +242,10 @@ jobs:
             fi
           else
             conda install compilers cython swig -q -y
+          fi
+
+          if [[ "${{ matrix.XCODE }}" ]]; then
+            sudo xcode-select -s "/Applications/Xcode_${{ matrix.XCODE }}.app"
           fi
 
       - name: Install PETSc
