@@ -573,6 +573,10 @@ class SqliteRecorder(CaseRecorder):
             inputs_text = json.dumps(inputs)
             residuals_text = json.dumps(residuals)
 
+            from pprint import pprint
+            pprint(data)
+            # print(f"{data['abs']=}")
+            # print(f"{data['rel']=}")
             abs_err = data['abs'] if 'abs' in data else None
             rel_err = data['rel'] if 'rel' in data else None
 

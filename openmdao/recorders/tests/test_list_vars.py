@@ -56,8 +56,9 @@ class ListVarsTest(unittest.TestCase):
         prob.recording_options['record_objectives'] = False
         prob.recording_options['record_constraints'] = False
         # residuals and derivatives are not recorded by default
-        prob.recording_options['record_abs_error'] = False
-        prob.recording_options['record_rel_error'] = False
+        model.recording_options['record_outputs'] = False
+        # prob.recording_options['record_abs_error'] = False
+        # prob.recording_options['record_rel_error'] = False
 
         model.add_recorder(rec)
         model.recording_options['record_inputs'] = False
@@ -76,15 +77,43 @@ class ListVarsTest(unittest.TestCase):
         prob.run_driver()
         prob.record('final')
 
-        cases = om.CaseReader('test_not_recorded.db')
-        prob_case = cases.get_case(cases.list_cases('problem', out_stream=None)[0])
-        drvr_case = cases.get_case(cases.list_cases('driver', out_stream=None)[0])
-        modl_case = cases.get_case(cases.list_cases('root', out_stream=None)[0])
+        cases = om.CaseReader(prob.get_outputs_dir() / 'test_not_recorded.db')
+        prob_case = cases.get_case(cases.list_cases('problem', out_stream=None)[-1])
+        drvr_case = cases.get_case(cases.list_cases('driver', out_stream=None)[-1])
+        modl_case = cases.get_case(cases.list_cases('root', out_stream=None)[-1])
+
+        print("===========================  model ==========================================")
 
         prob.model.list_vars(is_design_var=True)
-        prob_case.list_vars(is_design_var=True)
+        print("-- inputs --")
+        prob.model.list_inputs()
+        print("-- outputs --")
+        prob.model.list_outputs()
 
-        # modl_case.list_inputs()
+        print("=========================== prob_case ==========================================")
+
+        prob_case.list_vars(is_design_var=True)
+        print("-- inputs --")
+        prob_case.list_inputs()
+        print("-- outputs --")
+        prob_case.list_outputs()
+
+        print("=========================== modl_case ==========================================")
+
+        modl_case.list_vars(is_design_var=True)
+        print("-- inputs --")
+        modl_case.list_inputs()
+        print("-- outputs --")
+        modl_case.list_outputs()
+
+        print("=========================== drvr_case ==========================================")
+
+        drvr_case.list_vars(is_design_var=True)
+        print("-- inputs --")
+        drvr_case.list_inputs()
+        print("-- outputs --")
+        drvr_case.list_outputs()
+
 
     def test_list_outputs(self):
         """
