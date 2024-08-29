@@ -41,24 +41,22 @@ class ListVarsTest(unittest.TestCase):
         self.assertEqual(str(cm.exception), msg)
 
     def test_not_recorded(self):
-        """
-        Test proper handling of things that were not recorded.
-        """
-
         prob = ParaboloidProblem()
         model = prob.model
         driver = prob.driver
 
         rec = om.SqliteRecorder('test_not_recorded.db')
 
+        # set all record options to False and make sure nothing blows up
         prob.add_recorder(rec)
-        # prob.recording_options['record_desvars'] = False
+        prob.recording_options['record_desvars'] = False
         prob.recording_options['record_objectives'] = False
         prob.recording_options['record_constraints'] = False
-        # residuals and derivatives are not recorded by default
-        model.recording_options['record_outputs'] = False
-        # prob.recording_options['record_abs_error'] = False
-        # prob.recording_options['record_rel_error'] = False
+        prob.recording_options['record_outputs'] = False
+        prob.recording_options['record_residuals'] = False
+        prob.recording_options['record_derivatives'] = False
+        prob.recording_options['record_abs_error'] = False
+        prob.recording_options['record_rel_error'] = False
 
         model.add_recorder(rec)
         model.recording_options['record_inputs'] = False
@@ -71,7 +69,8 @@ class ListVarsTest(unittest.TestCase):
         driver.recording_options['record_desvars'] = False
         driver.recording_options['record_objectives'] = False
         driver.recording_options['record_constraints'] = False
-        # residuals and derivatives are not recorded by default
+        driver.recording_options['record_residuals'] = False
+        driver.recording_options['record_derivatives'] = False
 
         prob.setup()
         prob.run_driver()
@@ -82,38 +81,36 @@ class ListVarsTest(unittest.TestCase):
         drvr_case = cases.get_case(cases.list_cases('driver', out_stream=None)[-1])
         modl_case = cases.get_case(cases.list_cases('root', out_stream=None)[-1])
 
-        print("===========================  model ==========================================")
+        prob_case.list_vars(is_design_var=True, out_stream=None)
+        prob_case.list_inputs(out_stream=None)
+        prob_case.list_outputs(out_stream=None)
 
-        prob.model.list_vars(is_design_var=True)
-        print("-- inputs --")
-        prob.model.list_inputs()
-        print("-- outputs --")
-        prob.model.list_outputs()
+        modl_case.list_vars(is_design_var=True, out_stream=None)
+        modl_case.list_inputs(out_stream=None)
+        modl_case.list_outputs(out_stream=None)
 
-        print("=========================== prob_case ==========================================")
+        drvr_case.list_vars(is_design_var=True, out_stream=None)
+        drvr_case.list_inputs(out_stream=None)
+        drvr_case.list_outputs(out_stream=None)
 
-        prob_case.list_vars(is_design_var=True)
-        print("-- inputs --")
-        prob_case.list_inputs()
-        print("-- outputs --")
-        prob_case.list_outputs()
+    def test_err_not_recorded(self):
+        prob = ParaboloidProblem()
 
-        print("=========================== modl_case ==========================================")
+        # set abs_err and rel_err to not be recorded and make sure nothing blows up
+        prob.add_recorder(om.SqliteRecorder('test_not_recorded.db'))
+        prob.recording_options['record_abs_error'] = False
+        prob.recording_options['record_rel_error'] = False
 
-        modl_case.list_vars(is_design_var=True)
-        print("-- inputs --")
-        modl_case.list_inputs()
-        print("-- outputs --")
-        modl_case.list_outputs()
+        prob.setup()
+        prob.run_driver()
+        prob.record('final')
 
-        print("=========================== drvr_case ==========================================")
+        cases = om.CaseReader(prob.get_outputs_dir() / 'test_err_not_recorded.db')
+        prob_case = cases.get_case(cases.list_cases('problem', out_stream=None)[-1])
 
-        drvr_case.list_vars(is_design_var=True)
-        print("-- inputs --")
-        drvr_case.list_inputs()
-        print("-- outputs --")
-        drvr_case.list_outputs()
-
+        prob_case.list_vars(is_design_var=True, out_stream=None)
+        prob_case.list_inputs(out_stream=None)
+        prob_case.list_outputs(out_stream=None)
 
     def test_list_outputs(self):
         """
@@ -198,7 +195,7 @@ class ListVarsTest(unittest.TestCase):
         p.model.add_design_var('x')
         p.model.add_objective('f')
 
-        p.driver = om.ScipyOptimizeDriver(optimizer='SLSQP')
+        p.driver = om.ScipyOptimizeDriver(optimizer='SLSQP', disp=False)
         p.driver.add_recorder(om.SqliteRecorder('driver_cases.db'))
         p.driver.recording_options['includes'] = ['*']
 
