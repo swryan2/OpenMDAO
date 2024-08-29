@@ -690,7 +690,6 @@ class Case(object):
                             if residuals:
                                 meta['resids'] = 'Not Recorded'
 
-
             # remove any outputs that don't pass the residuals_tol filter
             for name in to_remove:
                 del outputs[name]
