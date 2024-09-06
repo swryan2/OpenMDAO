@@ -26,7 +26,7 @@ def get_poem_id(repository, pull_id):
     int
         0 if an associated POEM was identified, 1 if not and -1 if an error occurred.
     """
-    repository = 'OpenMDAO'  # FIXME: debugging
+    repository = 'OpenMDAO/OpenMDAO'  # FIXME: debugging
     print("-------------------------------------------------------------------------------")
     print(f"Checking Pull Request #{pull_id} on ${repository} for associated issue...")
     print("-------------------------------------------------------------------------------")
