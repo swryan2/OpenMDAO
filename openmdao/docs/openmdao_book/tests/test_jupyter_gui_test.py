@@ -10,7 +10,9 @@ except ImportError:
         def test_jupyter_book_docs(self):
             raise unittest.SkipTest("tests require the 'playwright' and 'aiounittest' packages.")
 else:
+    os.system("playwright install-deps")
     os.system("playwright install")
+
     from .jupyter_gui_test import TestOpenMDAOJupyterBookDocs  # noqa: F401
 
 
