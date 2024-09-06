@@ -44,10 +44,10 @@ jobs:
           PR_NUMBER: ${{ github.event.number }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          if python .github/scripts/get_poem_id.py ${GITHUB_REPOSITORY} $PR_NUMBER; then
-            export POEM_MESSAGE=$(<POEM_MESSAGE.txt)
+          if python .github/scripts/get_poem_message.py ${GITHUB_REPOSITORY} $PR_NUMBER; then
+            export POEM_MESSAGE="$(<POEM_MESSAGE.txt)""
           fi
-          echo "POEM_MESSAGE=$POEM_MESSAGE" >> $GITHUB_OUTPUT
+          echo "POEM_MESSAGE=\"$POEM_MESSAGE\"" >> $GITHUB_OUTPUT
 
       - name: Comment on PR
         if: (github.event.action == 'opened' || github.event.action == 'reopened') && steps.check_for_poem.outputs.POEM_MESSAGE != ''

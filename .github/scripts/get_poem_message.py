@@ -142,7 +142,6 @@ def get_poem_message(repository, pull_id, github_token=None):
     print(f"Checking for existence of POEM_{poem_id}...")
     print("-------------------------------------------------------------------------------")
 
-    poem_text = ''
     try:
         poem_text = github_read_file('OpenMDAO/POEMs', f'POEM_{poem_id}.md', github_token)
     except requests.exceptions.HTTPError:
@@ -150,11 +149,18 @@ def get_poem_message(repository, pull_id, github_token=None):
             f.write("\n\n** WARNING **\n"
                     f"Unable to find POEM_{poem_id} in the [POEMs](https://github.com/OpenMDAO/POEMs) repository. "
                     "Has it been 'Accepted' and merged?")
-        return ERROR
+    else:
+        print("-------------------------------------------------------------------------------")
+        print("POEM Text:")
+        print(poem_text)
+        print("-------------------------------------------------------------------------------")
 
-    print("----------------")
-    print(f"{poem_text=}")
-    print("----------------")
+    print("-------------------------------------------------------------------------------")
+    print("POEM Message:")
+    print("-------------------------------------------------------------------------------")
+
+    with open(POEM_MESSAGE_FILE, 'r') as f:
+        print(f.read())
 
 
 if __name__ == '__main__':
