@@ -3,16 +3,53 @@
 import sys
 import subprocess
 import json
+import base64
+import requests
 
-FILENAME = 'POEM_ID.txt'
+
+POEM_MESSAGE_FILE = 'POEM_MESSAGE.txt'
 
 SUCCESS = 0
 NOT_FOUND = 1
 ERROR = -1
 
-def get_poem_id(repository, pull_id):
+
+def github_read_file(repository, file_path, github_token=None):
     """
-    Read the body of the specified pull request, write the ID of any associated POEM to FILENAME.
+    Get the contents of a file from a GitHub repository using the API.
+
+
+    Parameters
+    ----------
+    repository : str
+        The owner and repository name. For example, 'octocat/Hello-World'.
+    file_path : str
+        The pathname of the file in the repository.
+    github_token : str, optional
+        The GitHub token.
+
+    Returns:
+    str
+        The contents of the file.
+    """
+    headers = {}
+    if github_token:
+        headers['Authorization'] = f"token {github_token}"
+
+    url = f'https://api.github.com/repos/{repository}/contents/{file_path}'
+    r = requests.get(url, headers=headers)
+    r.raise_for_status()
+    data = r.json()
+    file_content = data['content']
+    file_content_encoding = data.get('encoding')
+    if file_content_encoding == 'base64':
+        file_content = base64.b64decode(file_content).decode()
+
+    return file_content
+
+def get_poem_message(repository, pull_id, github_token=None):
+    """
+    Read the body of the specified pull request, write the ID of any associated POEM to POEM_ID_FILE.
 
     Parameters
     ----------
@@ -20,6 +57,8 @@ def get_poem_id(repository, pull_id):
         The owner and repository name. For example, 'octocat/Hello-World'.
     pull_id : str
         The id of a pull request.
+    github_token : str, optional
+        The GitHub token.
 
     Returns
     -------
@@ -27,11 +66,10 @@ def get_poem_id(repository, pull_id):
         0 if an associated POEM was identified, 1 if not and -1 if an error occurred.
     """
     print("-------------------------------------------------------------------------------")
-    print(f"Checking Pull Request #{pull_id} on ${repository} for associated issue...")
+    print(f"Checking Pull Request #{pull_id} on {repository} for associated issue...")
     print("-------------------------------------------------------------------------------")
+    cmd = ["gh", "--repo", repository, "issue", "view", "--json", "body", pull_id]
     try:
-        cmd = ["gh", "--repo", repository, "issue", "view", "--json", "body", pull_id]
-        print(f"{' '.join(cmd)}")
         pull_json = subprocess.check_output(cmd)
     except subprocess.CalledProcessError as err:
         print(f"Unable to access pull request #{pull_id} on repository {repository}:\nrc={err.returncode}")
@@ -58,12 +96,11 @@ def get_poem_id(repository, pull_id):
     repository = 'OpenMDAO/OpenMDAO'  # FIXME: debugging
 
     print("-------------------------------------------------------------------------------")
-    print(f"Checking Issue #{issue_id} on ${repository} for associated POEM...")
+    print(f"Checking Issue #{issue_id} on {repository} for associated POEM...")
     print("-------------------------------------------------------------------------------")
 
+    cmd = ["gh", "--repo", repository, "issue", "view", "--json", "body", issue_id]
     try:
-        cmd = ["gh", "--repo", repository, "issue", "view", "--json", "body", issue_id]
-        print(f"{' '.join(cmd)}")
         issue_json = subprocess.check_output(cmd)
     except subprocess.CalledProcessError as err:
         print(f"Unable to access issue  #{issue_id} on repository {repository}:\nrc={err.returncode}")
@@ -98,10 +135,27 @@ def get_poem_id(repository, pull_id):
         # valid poem ID not found, could be blank or "_No response_"
         return NOT_FOUND
     else:
-        with open(FILENAME, 'w') as f:
-            f.write(f"POEM_ID={poem_id}")
-        return SUCCESS
+        with open(POEM_MESSAGE_FILE, 'w') as f:
+            f.write(f'This pull request will transition [POEM_{poem_id}](OpenMDAO/POEMs/blob/master/POEM_{poem_id}.md) to `Integrated`')
+
+    print("-------------------------------------------------------------------------------")
+    print(f"Checking for existence of POEM_{poem_id}...")
+    print("-------------------------------------------------------------------------------")
+
+    poem_text = ''
+    try:
+        poem_text = github_read_file('OpenMDAO/POEMs', f'POEM_{poem_id}.md', github_token)
+    except requests.exceptions.HTTPError:
+        with open(POEM_MESSAGE_FILE, 'a') as f:
+            f.write("\n\n** WARNING **\n"
+                    f"Unable to find POEM_{poem_id} in the [POEMs](https://github.com/OpenMDAO/POEMs) repository. "
+                    "Has it been 'Accepted' and merged?")
+        return ERROR
+
+    print("----------------")
+    print(f"{poem_text=}")
+    print("----------------")
 
 
 if __name__ == '__main__':
-    exit(get_poem_id(sys.argv[1], sys.argv[2]))
+    exit(get_poem_message(sys.argv[1], sys.argv[2]))
