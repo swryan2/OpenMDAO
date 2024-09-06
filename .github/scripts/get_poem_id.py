@@ -27,13 +27,14 @@ def get_poem_id(repository, pull_id):
         0 if an associated POEM was identified, 1 if not and -1 if an error occurred.
     """
     print("-------------------------------------------------------------------------------")
-    print(f"Checking Pull Request #{pull_id} for associated issue...")
+    print(f"Checking Pull Request #{pull_id} on ${repository} for associated issue...")
     print("-------------------------------------------------------------------------------")
     try:
-        pull_json = subprocess.check_output(["gh", "--repo", repository,
-                                             "issue", "view", "--json", "body", pull_id])
+        cmd = ["gh", "--repo", repository, "issue", "view", "--json", "body", pull_id]
+        print(f"{' '.join(cmd)}")
+        pull_json = subprocess.check_output(cmd)
     except subprocess.CalledProcessError as err:
-        print(f"Unable to access pull request #{pull_id}:\nrc={err.returncode}")
+        print(f"Unable to access pull request #{pull_id} on repository {repository}:\nrc={err.returncode}")
         return ERROR
 
     pull_body = json.loads(pull_json)["body"]
@@ -54,15 +55,18 @@ def get_poem_id(repository, pull_id):
         # issue ID not found, could be blank or "N/A"
         return NOT_FOUND
 
+    repository = 'OpenMDAO/OpenMDAO'  # FIXME: debugging
+
     print("-------------------------------------------------------------------------------")
-    print(f"Checking Issue #{issue_id} for associated POEM...")
+    print(f"Checking Issue #{issue_id} on ${repository} for associated POEM...")
     print("-------------------------------------------------------------------------------")
 
     try:
-        issue_json = subprocess.check_output(["gh", "--repo", repository,
-                                              "issue", "view", "--json", "body", issue_id])
+        cmd = ["gh", "--repo", repository, "issue", "view", "--json", "body", issue_id]
+        print(f"{' '.join(cmd)}")
+        issue_json = subprocess.check_output(cmd)
     except subprocess.CalledProcessError as err:
-        print(f"Unable to access issue  #{issue_id}:\nrc={err.returncode}")
+        print(f"Unable to access issue  #{issue_id} on repository {repository}:\nrc={err.returncode}")
         return ERROR
 
     issue_body = json.loads(issue_json)["body"]
