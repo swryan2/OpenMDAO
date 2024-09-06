@@ -44,7 +44,7 @@ jobs:
           PR_NUMBER: ${{ github.event.number }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          if python .github/scripts/get_poem_id.py ${GITHUB_REPOSITORY} $PR_NUMBER; then
+          if python .github/scripts/get_poem_message.py ${GITHUB_REPOSITORY} $PR_NUMBER; then
             export POEM_MESSAGE=$(<POEM_MESSAGE.txt)
           fi
           echo "POEM_MESSAGE=$POEM_MESSAGE" >> $GITHUB_OUTPUT
